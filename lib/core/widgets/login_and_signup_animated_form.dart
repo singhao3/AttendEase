@@ -1,6 +1,7 @@
-// ignore_for_file: public_member_api_docs, sort_constructors_first, constant_identifier_names
+// ignore_for_file: public_member_api_docs, sort_constructors_first, constant_identifier_names, use_build_context_synchronously, implementation_imports
 import 'dart:io';
 import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:permission_handler/permission_handler.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:psm2_attendease/services/ml_service.dart';
 import 'package:rive/rive.dart';
 
 import '../../../helpers/app_regex.dart';
@@ -37,12 +39,14 @@ class EmailAndPassword extends StatefulWidget {
   final bool? isPasswordPage;
   late GoogleSignInAccount? googleUser;
   late OAuthCredential? credential;
+  final MLService? mlService;
   EmailAndPassword({
     super.key,
     this.isSignUpPage,
     this.isPasswordPage,
     this.googleUser,
     this.credential,
+    this.mlService,
   });
 
   @override
@@ -225,6 +229,7 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
 
   AppTextButton signUpButton(BuildContext context) {
     final FirebaseHelpers firebaseHelpers = FirebaseHelpers();
+
     return AppTextButton(
       buttonText: "Create Account",
       textStyle: TextStyles.font16White600Weight,
@@ -245,25 +250,37 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
           }
 
           try {
+            List? faceData;
+            if (widget.mlService != null) {
+              // Validate and extract face data
+              final imageBytes = await profileImage!.readAsBytes();
+              print("Image bytes length: ${imageBytes.length}");
+              faceData = await widget.mlService!
+                  .validateAndExtractFaceData(imageBytes);
+              print("Face data extracted successfully");
+            }
+
             await _auth.createUserWithEmailAndPassword(
               email: emailController.text,
               password: passwordController.text,
             );
             await _auth.currentUser!.updateDisplayName(nameController.text);
 
-            // Upload profile picture and save data
+            // Upload profile picture
             String profileUrl =
                 await firebaseHelpers.uploadProfilePicture(profileImage);
+
+            // Save user data with face data
             await firebaseHelpers.saveUserDataToFirestore(
               name: nameController.text,
               email: emailController.text,
               contactNumber: contactNumberController.text,
               profileUrl: profileUrl,
+              faceData: faceData, // Save face data if available
             );
 
             await _auth.currentUser!.sendEmailVerification();
             await _auth.signOut();
-            if (!context.mounted) return;
 
             await AwesomeDialog(
               context: context,
@@ -276,24 +293,17 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
             addSuccessController();
             await Future.delayed(const Duration(seconds: 2));
             removeAllControllers();
-            if (!context.mounted) return;
+
+            if (!mounted) return;
 
             context.pushNamedAndRemoveUntil(
               Routes.loginScreen,
               predicate: (route) => false,
             );
-          } on FirebaseAuthException {
-            addFailController();
-
-            AwesomeDialog(
-              context: context,
-              dialogType: DialogType.error,
-              animType: AnimType.rightSlide,
-              title: 'Error',
-              desc: 'This account already exists for that email go and login.',
-            ).show();
           } catch (e) {
             addFailController();
+
+            if (!mounted) return;
 
             AwesomeDialog(
               context: context,
@@ -321,16 +331,29 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
               email: emailController.text,
               password: passwordController.text,
             );
-            if (c.user!.emailVerified) {
+            final userRole = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(c.user!.uid)
+                .get()
+                .then((doc) => doc.data()?['role']);
+
+            if (c.user!.emailVerified || userRole == 'admin') {
               addSuccessController();
               await Future.delayed(const Duration(seconds: 2));
               removeAllControllers();
               if (!context.mounted) return;
 
-              context.pushNamedAndRemoveUntil(
-                Routes.homeScreen,
-                predicate: (route) => false,
-              );
+              if (userRole == 'admin') {
+                context.pushNamedAndRemoveUntil(
+                  Routes.adminHomeScreen,
+                  predicate: (route) => false,
+                );
+              } else {
+                context.pushNamedAndRemoveUntil(
+                  Routes.homeScreen,
+                  predicate: (route) => false,
+                );
+              }
             } else {
               await _auth.signOut();
               addFailController();
@@ -612,57 +635,56 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
   }
 
   Widget profilePictureField(BuildContext context) {
-  if (widget.isSignUpPage == true) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 8.0),
-          child: Text(
-            'Capture Profile Picture',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16.0,
+    if (widget.isSignUpPage == true) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              'Capture Profile Picture',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16.0,
+              ),
             ),
           ),
-        ),
-        GestureDetector(
-          onTap: () async {
-            final XFile? image = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CameraWidget()),
-            );
-            if (image != null) {
-              setState(() {
-                profileImage = image;
-              });
-            }
-          },
-          child: Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-            child: Center(
-              child: profileImage == null
-                  ? const Icon(Icons.camera_alt, size: 50, color: Colors.grey)
-                  : Image.file(
-                      File(profileImage!.path),
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
+          GestureDetector(
+            onTap: () async {
+              final XFile? capturedImage = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CameraWidget()),
+              );
+              if (capturedImage != null) {
+                setState(() {
+                  profileImage = capturedImage;
+                });
+              }
+            },
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Center(
+                child: profileImage == null
+                    ? const Icon(Icons.camera_alt, size: 50, color: Colors.grey)
+                    : Image.file(
+                        File(profileImage!.path),
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      ),
+              ),
             ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    }
+    return const SizedBox.shrink();
   }
-  return const SizedBox.shrink();
-}
-
 
   @override
   Widget build(BuildContext context) {

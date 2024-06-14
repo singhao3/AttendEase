@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/create_password/ui/create_password.dart';
 import '../screens/forget/ui/forget_screen.dart';
+import '../screens/home/ui/admin_home_screen.dart';
 import '../screens/home/ui/home_screen.dart';
 import '../screens/login/ui/login_screen.dart';
 import '../screens/signup/ui/sign_up_sceen.dart';
@@ -21,6 +22,8 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) => const HomeScreen(),
         );
+      case Routes.adminHomeScreen:
+        return MaterialPageRoute(builder: (_) => const AdminHomeScreen());
       case Routes.createPassword:
         final arguments = settings.arguments;
         if (arguments is List) {

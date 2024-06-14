@@ -22,6 +22,10 @@ class WeeklyScheduleScreen extends StatelessWidget {
     return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   }
 
+  void _launchLocation(String location) {
+    // Implement the method to launch location, e.g., open a map
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
@@ -73,25 +77,94 @@ class WeeklyScheduleScreen extends StatelessWidget {
 
                                     return Card(
                                       margin: EdgeInsets.symmetric(vertical: 8.h),
-                                      child: ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: avatarColor,
-                                          child: Text(classInfo['subject'][0]), // First letter of subject
-                                        ),
-                                        title: Text("${classInfo['subject']}"),
-                                        subtitle: Column(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(15.r),
+                                      ),
+                                      elevation: 2,
+                                      child: Padding(
+                                        padding: EdgeInsets.all(15.w),
+                                        child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text("Time: ${classInfo['time']}"),
-                                            Text("Location: ${classInfo['location']}"),
+                                            Row(
+                                              children: [
+                                                CircleAvatar(
+                                                  backgroundColor: avatarColor,
+                                                  child: Text(
+                                                    classInfo['subject'][0],
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                                SizedBox(width: 10.w),
+                                                Expanded(
+                                                  child: Text(
+                                                    classInfo['subject'],
+                                                    style: TextStyle(
+                                                      fontSize: 18.sp,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            SizedBox(height: 10.h),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.access_time, size: 16.sp, color: Colors.grey),
+                                                SizedBox(width: 5.w),
+                                                Expanded(
+                                                  child: Text(
+                                                    classInfo['time'],
+                                                    style: TextStyle(
+                                                      fontSize: 14.sp,
+                                                      color: Colors.grey[700],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            SizedBox(height: 10.h),
+                                            GestureDetector(
+                                              onTap: () => _launchLocation(classInfo['location']),
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.location_on, size: 16.sp, color: Colors.grey),
+                                                  SizedBox(width: 5.w),
+                                                  Expanded(
+                                                    child: Text(
+                                                      classInfo['location'],
+                                                      style: TextStyle(
+                                                        fontSize: 14.sp,
+                                                        color: Colors.grey[700],
+                                                        decoration: TextDecoration.underline,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (classInfo['place'] != null) ...[
+                                              SizedBox(height: 10.h),
+                                              Row(
+                                                children: [
+                                                  Icon(Icons.meeting_room, size: 16.sp, color: Colors.grey),
+                                                  SizedBox(width: 5.w),
+                                                  Expanded(
+                                                    child: Text(
+                                                      classInfo['place'],
+                                                      style: TextStyle(
+                                                        fontSize: 14.sp,
+                                                        color: Colors.grey[700],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
                                           ],
-                                        ),
-                                        trailing: Text(
-                                          classInfo['status'].toUpperCase(),
-                                          style: TextStyle(
-                                            color: classInfo['status'] == 'present' ? Colors.green : Colors.red,
-                                            fontWeight: FontWeight.bold,
-                                          ),
                                         ),
                                       ),
                                     );

@@ -1,58 +1,51 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:psm2_attendease/services/notification_service.dart';
 import 'routing/app_router.dart';
 import 'routing/routes.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/authentication_bloc.dart';
-import 'bloc/attendance_bloc.dart'; // Import AttendanceBloc
+import 'bloc/attendance_bloc.dart';
 import 'firebase_options.dart';
-
-late String initialRoute;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.initialize();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
-  FirebaseAuth.instance.authStateChanges().listen(
-    (user) {
-      if (user == null || !user.emailVerified) {
-        initialRoute = Routes.splashScreen;
-      } else {
-        initialRoute = Routes.homeScreen;
-      }
-    },
-  );
 
-  final AuthenticationBloc authenticationBloc = AuthenticationBloc();
-  final userId = FirebaseAuth.instance.currentUser?.uid ?? ''; // Get the current user ID
-  final AttendanceBloc attendanceBloc = AttendanceBloc(userId)..add(LoadAttendance()); // Initialize AttendanceBloc
-
-  await ScreenUtil.ensureScreenSize();
-
-  runApp(
-    MultiBlocProvider(
-      providers: [
-        BlocProvider<AuthenticationBloc>(
-          create: (context) => authenticationBloc,
-        ),
-        BlocProvider<AttendanceBloc>(
-          create: (context) => attendanceBloc,
-        ),
-      ],
-      child: MyApp(router: AppRouter()),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final AppRouter router;
+  const MyApp({super.key});
 
-  const MyApp({super.key, required this.router});
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthenticationBloc>(
+          create: (context) => AuthenticationBloc()..add(AppStarted()),
+        ),
+        BlocProvider<AttendanceBloc>(
+          create: (context) => AttendanceBloc(''),
+        ),
+      ],
+      child: const App(),
+    );
+  }
+}
 
+class App extends StatefulWidget {
+  const App({super.key});
+
+  @override
+  AppState createState() => AppState();
+}
+
+class AppState extends State<App> {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
@@ -65,9 +58,26 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
           ),
-          onGenerateRoute: router.generateRoute,
+          onGenerateRoute: AppRouter().generateRoute,
           debugShowCheckedModeBanner: false,
-          initialRoute: initialRoute,
+          home: BlocListener<AuthenticationBloc, AuthenticationState>(
+            listener: (context, state) {
+              Future.microtask(() {
+                if (state is AuthenticationUnauthenticated) {
+                  Navigator.pushReplacementNamed(context, Routes.loginScreen);
+                } else if (state is AuthenticationAuthenticated) {
+                  Navigator.pushReplacementNamed(context, Routes.homeScreen);
+                } else if (state is AdminAuthenticated) {
+                  Navigator.pushReplacementNamed(context, Routes.adminHomeScreen);
+                }
+              });
+            },
+            child: const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ),
         );
       },
     );

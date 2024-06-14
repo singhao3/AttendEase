@@ -10,3 +10,5 @@ class AuthenticationLoading extends AuthenticationState {}
 class AuthenticationAuthenticated extends AuthenticationState {}
 
 class AuthenticationUnauthenticated extends AuthenticationState {}
+
+class AdminAuthenticated extends AuthenticationState {}

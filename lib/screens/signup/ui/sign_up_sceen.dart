@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:gap/gap.dart';
+import 'package:psm2_attendease/services/ml_service.dart';
 
 import '../../../helpers/google_sign_in.dart';
 import '../../../core/widgets/already_have_account_text.dart';
@@ -15,11 +16,13 @@ class SignUpScreen extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
+    final MLService mlService = MLService();
+    mlService.initialize(); // Initialize ML service
+    
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding:
-              EdgeInsets.only(left: 30.w, right: 30.w, bottom: 15.h, top: 5.h),
+          padding: EdgeInsets.only(left: 30.w, right: 30.w, bottom: 15.h, top: 5.h),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,9 +39,7 @@ class SignUpScreen extends StatelessWidget {
                 Gap(8.h),
                 Column(
                   children: [
-                    EmailAndPassword(
-                      isSignUpPage: true,
-                    ),
+                    EmailAndPassword(isSignUpPage: true, mlService: mlService),
                     Gap(10.h),
                     const SigninWithGoogleText(),
                     Gap(5.h),

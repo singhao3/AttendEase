@@ -20,3 +20,18 @@ class ScanFaceForAttendance extends AttendanceEvent {
 
   ScanFaceForAttendance(this.imagePath, this.subject, this.day);
 }
+
+class UpdateUserId extends AttendanceEvent {
+  final String userId;
+
+  UpdateUserId(this.userId);
+}
+
+class ClearAttendance extends AttendanceEvent {}
+
+class GenerateReport extends AttendanceEvent {
+  final DateTime startDate;
+  final DateTime endDate;
+
+  GenerateReport(this.startDate, this.endDate);
+}

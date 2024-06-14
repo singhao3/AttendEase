@@ -12,6 +12,7 @@ class CameraWidget extends StatefulWidget {
 class _CameraWidgetState extends State<CameraWidget> {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
+  bool _isCameraInitialized = false;
 
   @override
   void initState() {
@@ -21,30 +22,52 @@ class _CameraWidgetState extends State<CameraWidget> {
 
   Future<void> _initializeCamera() async {
     _cameras = await availableCameras();
-    final CameraDescription frontCamera = _cameras!.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => _cameras!.first,
-    );
-    _controller = CameraController(frontCamera, ResolutionPreset.medium);
-    await _controller!.initialize();
-    setState(() {});
+    if (_cameras != null && _cameras!.isNotEmpty) {
+      final CameraDescription frontCamera = _cameras!.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => _cameras!.first,
+      );
+      _controller = CameraController(frontCamera, ResolutionPreset.medium);
+      await _controller!.initialize().then((_) {
+        if (!mounted) return;
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      }).catchError((e) {
+        print('Error initializing camera: $e');
+      });
+      _controller!.addListener(() {
+        if (_controller!.value.hasError) {
+          print('Camera error: ${_controller!.value.errorDescription}');
+        }
+      });
+    }
   }
 
-  Future<XFile?> takePicture() async {
+  Future<void> _takePicture() async {
     if (!_controller!.value.isInitialized) {
-      return null;
+      print("Camera not initialized");
+      return;
     }
 
     if (_controller!.value.isTakingPicture) {
       // A capture is already pending, do nothing.
-      return null;
+      print("Capture already pending");
+      return;
     }
 
     try {
-      XFile file = await _controller!.takePicture();
-      return file;
+      print("Attempting to take picture");
+      final XFile image = await _controller!.takePicture();
+      print("Picture taken: ${image.path}");
+      if (!mounted) {
+        print("Widget not mounted after picture taken");
+        return;
+      }
+      Navigator.pop(context, image);
+      print("Navigator pop called");
     } catch (e) {
-      return null;
+      print("Failed to take picture: $e");
     }
   }
 
@@ -55,7 +78,7 @@ class _CameraWidgetState extends State<CameraWidget> {
       body: Column(
         children: [
           Expanded(
-            child: _controller == null || !_controller!.value.isInitialized
+            child: !_isCameraInitialized
                 ? const Center(child: CircularProgressIndicator())
                 : CameraPreview(_controller!),
           ),
@@ -65,13 +88,7 @@ class _CameraWidgetState extends State<CameraWidget> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 FloatingActionButton(
-                  onPressed: () async {
-                    XFile? image = await takePicture();
-                    if (image != null) {
-                      // ignore: use_build_context_synchronously
-                      Navigator.pop(context, image);
-                    }
-                  },
+                  onPressed: _takePicture,
                   child: const Icon(Icons.camera_alt),
                 ),
               ],

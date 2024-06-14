@@ -28,6 +28,8 @@ class FirebaseHelpers {
     required String email,
     required String contactNumber,
     String? profileUrl,
+    List?
+        faceData, // Make sure the data type aligns with what Firestore expects
   }) async {
     await FirebaseFirestore.instance
         .collection('users')
@@ -37,12 +39,15 @@ class FirebaseHelpers {
       'email': email,
       'contactNumber': contactNumber,
       'profilePictureUrl': profileUrl ?? '',
+      'faceData':
+          faceData ?? [], // Ensuring it defaults to an empty list if null
     });
   }
 
   Future<String?> fetchUserProfileUrl() async {
     String userId = FirebaseAuth.instance.currentUser!.uid;
-    DocumentSnapshot userDoc = await _firestore.collection('users').doc(userId).get();
+    DocumentSnapshot userDoc =
+        await _firestore.collection('users').doc(userId).get();
     var userData = userDoc.data() as Map<String, dynamic>?;
     return userData?['profilePictureUrl'] as String?;
   }
