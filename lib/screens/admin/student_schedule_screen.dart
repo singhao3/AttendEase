@@ -1,171 +1,158 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'location_picker_screen.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
   final String studentId;
   final String studentName;
 
-  const StudentScheduleScreen({super.key, required this.studentId, required this.studentName});
+  const StudentScheduleScreen({
+    super.key,
+    required this.studentId,
+    required this.studentName,
+  });
 
   @override
-  _StudentScheduleScreenState createState() => _StudentScheduleScreenState();
+  State<StudentScheduleScreen> createState() => _StudentScheduleScreenState();
 }
 
 class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Map<String, dynamic> weeklySchedule = {};
+  List<Map<String, dynamic>> registeredClasses = [];
+  List<Map<String, dynamic>> predefinedClasses = [];
+  Map<String, dynamic>? selectedClass;
 
   @override
   void initState() {
     super.initState();
-    fetchSchedule();
+    fetchPredefinedClasses();
+    fetchStudentSchedule();
   }
 
-  Future<void> fetchSchedule() async {
-    DocumentSnapshot userDoc = await _firestore.collection('users').doc(widget.studentId).get();
-    if (userDoc.exists && userDoc.data() != null) {
-      setState(() {
-        weeklySchedule = userDoc.get('weeklySchedule') ?? {};
-      });
+  Future<void> fetchPredefinedClasses() async {
+    try {
+      DocumentSnapshot adminDoc =
+          await _firestore.collection('admin').doc('tuitionClasses').get();
+
+      if (adminDoc.exists && adminDoc.data() != null) {
+        Map<String, dynamic>? classesMap = adminDoc.get('classes');
+        if (classesMap != null) {
+          List<Map<String, dynamic>> allClasses = [];
+
+          classesMap.forEach((level, levelData) {
+            levelData.forEach((day, dayData) {
+              List<Map<String, dynamic>> dayClasses =
+                  List<Map<String, dynamic>>.from(dayData);
+              for (var classInfo in dayClasses) {
+                classInfo['day'] = day;
+                allClasses.add(classInfo);
+              }
+            });
+          });
+
+          allClasses.sort((a, b) => _dayToInt(a['day']).compareTo(_dayToInt(b['day'])));
+
+          setState(() {
+            predefinedClasses = allClasses;
+          });
+        }
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error fetching predefined classes: $e');
+    }
+  }
+
+  int _dayToInt(String day) {
+    const days = {
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+      'Saturday': 6,
+      'Sunday': 7,
+    };
+    return days[day] ?? 0;
+  }
+
+  Future<void> fetchStudentSchedule() async {
+    try {
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(widget.studentId).get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        List<Map<String, dynamic>> classes = List<Map<String, dynamic>>.from(
+          userDoc.get('registeredClasses') ?? [],
+        );
+
+        setState(() {
+          registeredClasses = classes;
+          predefinedClasses.removeWhere((predefinedClass) =>
+              registeredClasses.any((registeredClass) =>
+                  registeredClass['subject'] == predefinedClass['subject'] &&
+                  registeredClass['startTime'] == predefinedClass['startTime'] &&
+                  registeredClass['endTime'] == predefinedClass['endTime'] &&
+                  registeredClass['location'] == predefinedClass['location'] &&
+                  registeredClass['roomNumber'] == predefinedClass['roomNumber']));
+        });
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error fetching student schedule: $e');
     }
   }
 
   Future<void> updateSchedule() async {
-    await _firestore.collection('users').doc(widget.studentId).update({
-      'weeklySchedule': weeklySchedule,
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Schedule updated successfully.')),
-    );
-  }
-
-  void _addClass(String day, Map<String, dynamic> classInfo) {
-    setState(() {
-      if (weeklySchedule[day] == null) {
-        weeklySchedule[day] = [];
-      }
-      weeklySchedule[day].add(classInfo);
-    });
-  }
-
-  void _editClass(String day, int index, Map<String, dynamic> updatedClassInfo) {
-    setState(() {
-      weeklySchedule[day][index] = updatedClassInfo;
-    });
-  }
-
-  void _removeClass(String day, int index) {
-    setState(() {
-      weeklySchedule[day].removeAt(index);
-      if (weeklySchedule[day].isEmpty) {
-        weeklySchedule.remove(day);
-      }
-    });
-  }
-
-  Future<void> _pickTime(BuildContext context, TextEditingController controller) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        controller.text = picked.format(context);
+    try {
+      await _firestore.collection('users').doc(widget.studentId).update({
+        'registeredClasses': registeredClasses,
       });
-    }
-  }
 
-  Future<void> _pickLocation(BuildContext context, TextEditingController controller) async {
-    final String? pickedAddress = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const LocationPickerScreen(),
-      ),
-    );
-    if (pickedAddress != null) {
-      setState(() {
-        controller.text = pickedAddress;
-      });
-    }
-  }
-
-  void _showClassDialog(String day, {int? index, Map<String, dynamic>? classInfo}) {
-    final TextEditingController subjectController = TextEditingController(text: classInfo?['subject']);
-    final TextEditingController timeController = TextEditingController(text: classInfo?['time']);
-    final TextEditingController locationController = TextEditingController(text: classInfo?['location']);
-    final TextEditingController placeController = TextEditingController(text: classInfo?['place']); 
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(index == null ? 'Add Class' : 'Edit Class'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: subjectController,
-                decoration: const InputDecoration(labelText: 'Subject'),
-              ),
-              TextField(
-                controller: timeController,
-                decoration: const InputDecoration(labelText: 'Time'),
-                readOnly: true,
-                onTap: () => _pickTime(context, timeController),
-              ),
-              TextField(
-                controller: locationController,
-                decoration: const InputDecoration(labelText: 'Location'),
-                readOnly: true,
-                onTap: () => _pickLocation(context, locationController),
-              ),
-              TextField(
-                controller: placeController,
-                decoration: const InputDecoration(labelText: 'Place'), 
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                final classInfo = {
-                  'subject': subjectController.text,
-                  'time': timeController.text,
-                  'location': locationController.text,
-                  'place': placeController.text, 
-                };
-                if (index == null) {
-                  _addClass(day, classInfo);
-                } else {
-                  _editClass(day, index, classInfo);
-                }
-                Navigator.of(context).pop();
-              },
-              child: Text(index == null ? 'Add' : 'Save'),
-            ),
-          ],
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Schedule updated successfully.')),
         );
-      },
-    );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update schedule: $e')),
+        );
+      }
+    }
   }
 
-  List<String> _sortedDaysOfWeek() {
-    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    return daysOfWeek.where((day) => weeklySchedule.containsKey(day)).toList();
+  void _addClass(Map<String, dynamic> classInfo) {
+    setState(() {
+      registeredClasses.add(classInfo);
+      // Remove added class from predefined classes
+      predefinedClasses.removeWhere((predefinedClass) =>
+          predefinedClass['subject'] == classInfo['subject'] &&
+          predefinedClass['startTime'] == classInfo['startTime'] &&
+          predefinedClass['endTime'] == classInfo['endTime'] &&
+          predefinedClass['location'] == classInfo['location'] &&
+          predefinedClass['roomNumber'] == classInfo['roomNumber']);
+      selectedClass = null;
+    });
+  }
+
+  void _removeClass(int index) {
+    setState(() {
+      registeredClasses.removeAt(index);
+    });
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.studentName}\'s Schedule', style: GoogleFonts.ropaSans()),
+        title: Text('${widget.studentName}\'s Schedule',
+            style: GoogleFonts.ropaSans()),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
@@ -173,66 +160,84 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: _sortedDaysOfWeek().map((day) {
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: ExpansionTile(
-              title: Text(day, style: GoogleFonts.ropaSans(fontSize: 18)),
-              children: [
-                ...List.generate(
-                  weeklySchedule[day].length,
-                  (index) {
-                    final classInfo = weeklySchedule[day][index] as Map<String, dynamic>;
-                    return ListTile(
-                      title: Text(classInfo['subject'], style: GoogleFonts.ropaSans(fontSize: 16)),
-                      subtitle: Text(
-                        'Time: ${classInfo['time']}\nLocation: ${classInfo['location']}\nPlace: ${classInfo['place']}', 
-                        style: GoogleFonts.ropaSans(fontSize: 14),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
-                            onPressed: () {
-                              _showClassDialog(day, index: index, classInfo: classInfo);
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              _removeClass(day, index);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  title: TextButton(
-                    onPressed: () {
-                      _showClassDialog(day);
-                    },
-                    child: const Text('Add Class'),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: DropdownButtonFormField<Map<String, dynamic>>(
+              isExpanded: true,
+              hint: const Text('Please select to add class'),
+              value: selectedClass,
+              items: predefinedClasses.map((classInfo) {
+                return DropdownMenuItem<Map<String, dynamic>>(
+                  value: classInfo,
+                  child: Text(
+                    '${classInfo['day']} - ${classInfo['subject']} - ${classInfo['startTime']} to ${classInfo['endTime']}',
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedClass = value;
+                });
+                if (value != null) {
+                  _addClass(value);
+                }
+              },
+              decoration: const InputDecoration(labelText: 'Add Class'),
             ),
-          );
-        }).toList(),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showClassDialog('Monday'); 
-        },
-        child: const Icon(Icons.add),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: registeredClasses.length,
+              itemBuilder: (context, index) {
+                final classInfo = registeredClasses[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8.0),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ListTile(
+                    title: Text(classInfo['subject'],
+                        style: GoogleFonts.ropaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${classInfo['day']}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        Text(
+                          'From: ${classInfo['startTime']} - ${classInfo['endTime']}',
+                          style: GoogleFonts.ropaSans(fontSize: 14),
+                        ),
+                        Text(
+                          'Location: ${classInfo['location']}',
+                          style: GoogleFonts.ropaSans(fontSize: 14),
+                        ),
+                        Text(
+                          'Room Number: ${classInfo['roomNumber']}',
+                          style: GoogleFonts.ropaSans(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        _removeClass(index);
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

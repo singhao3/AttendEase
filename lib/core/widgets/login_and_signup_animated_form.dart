@@ -11,6 +11,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:psm2_attendease/services/ml_service.dart';
+import 'package:psm2_attendease/theming/colors.dart';
 import 'package:rive/rive.dart';
 
 import '../../../helpers/app_regex.dart';
@@ -68,6 +69,9 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
   TextEditingController passwordConfirmationController =
       TextEditingController();
   TextEditingController contactNumberController = TextEditingController();
+  String? selectedLevel;
+  List<String> selectedClasses = [];
+  List<Map<String, dynamic>> availableClasses = [];
   XFile? profileImage;
   final formKey = GlobalKey<FormState>();
   Artboard? riveArtboard;
@@ -196,6 +200,38 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
     });
   }
 
+  Future<void> fetchAvailableClasses(String level, BuildContext context) async {
+    DocumentSnapshot classesDoc = await FirebaseFirestore.instance
+        .collection('admin')
+        .doc('tuitionClasses')
+        .get();
+
+    if (classesDoc.exists && classesDoc.data() != null) {
+      var data = classesDoc.get('classes')[level] ?? {};
+      List<Map<String, dynamic>> fetchedClasses = [];
+
+      data.forEach((day, classes) {
+        for (var classInfo in classes) {
+          fetchedClasses.add({
+            ...classInfo,
+            'day': day,
+          });
+        }
+      });
+
+      setState(() {
+        availableClasses = fetchedClasses;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No classes found for the selected level'),
+          duration: Duration(seconds: 2), // Adjust duration as needed
+        ),
+      );
+    }
+  }
+
   Widget forgetPasswordTextButton(BuildContext context) {
     if (widget.isSignUpPage == null && widget.isPasswordPage == null) {
       return TextButton(
@@ -237,7 +273,6 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
         passwordFocuseNode.unfocus();
         passwordConfirmationFocuseNode.unfocus();
         if (formKey.currentState!.validate()) {
-          // Check if a profile picture has been uploaded
           if (profileImage == null) {
             await AwesomeDialog(
               context: context,
@@ -246,18 +281,16 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
               title: 'Profile Picture Required',
               desc: 'Please upload a profile picture to continue.',
             ).show();
-            return; // Return early if no profile image is selected
+            return;
           }
-
           try {
             List? faceData;
             if (widget.mlService != null) {
-              // Validate and extract face data
               final imageBytes = await profileImage!.readAsBytes();
-              print("Image bytes length: ${imageBytes.length}");
+              debugPrint("Image bytes length: ${imageBytes.length}");
               faceData = await widget.mlService!
                   .validateAndExtractFaceData(imageBytes);
-              print("Face data extracted successfully");
+              debugPrint("Face data extracted successfully");
             }
 
             await _auth.createUserWithEmailAndPassword(
@@ -266,17 +299,17 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
             );
             await _auth.currentUser!.updateDisplayName(nameController.text);
 
-            // Upload profile picture
             String profileUrl =
                 await firebaseHelpers.uploadProfilePicture(profileImage);
 
-            // Save user data with face data
             await firebaseHelpers.saveUserDataToFirestore(
               name: nameController.text,
               email: emailController.text,
               contactNumber: contactNumberController.text,
               profileUrl: profileUrl,
-              faceData: faceData, // Save face data if available
+              faceData: faceData,
+              level: selectedLevel,
+              selectedClasses: selectedClasses,
             );
 
             await _auth.currentUser!.sendEmailVerification();
@@ -316,6 +349,94 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
         }
       },
     );
+  }
+
+  Widget studentLevelDropdown() {
+    if (widget.isSignUpPage == true) {
+      return DropdownButtonFormField<String>(
+        decoration: const InputDecoration(labelText: 'Select Level'),
+        value: selectedLevel,
+        onChanged: (String? value) {
+          setState(() {
+            selectedLevel = value;
+            fetchAvailableClasses(value!, context);
+          });
+        },
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            addFailController();
+            return 'Please select a level';
+          }
+          return null;
+        },
+        items: <String>[
+          'Form 4',
+          'Form 5',
+        ].map<DropdownMenuItem<String>>((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(value),
+          );
+        }).toList(),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget classSelectionWidget() {
+    if (selectedLevel != null && availableClasses.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Select Classes',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          ...availableClasses.map((classInfo) {
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CheckboxListTile(
+                  title: Text(
+                    classInfo['subject'] ?? '',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Day: ${classInfo['day'] ?? ''}'),
+                      Text(
+                          'Time: ${classInfo['startTime'] ?? ''} - ${classInfo['endTime'] ?? ''}'),
+                      Text('Location: ${classInfo['location'] ?? ''}'),
+                      Text('Room Number: ${classInfo['roomNumber'] ?? ''}'),
+                    ],
+                  ),
+                  value: selectedClasses.contains(classInfo['subject']),
+                  activeColor: ColorsManager.mainBlue,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        selectedClasses.add(classInfo['subject']);
+                      } else {
+                        selectedClasses.remove(classInfo['subject']);
+                      }
+                    });
+                  },
+                ),
+              ),
+            );
+          }),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   AppTextButton loginButton(BuildContext context) {
@@ -719,6 +840,10 @@ class _EmailAndPasswordState extends State<EmailAndPassword> {
           contactNumberField(),
           Gap(18.h),
           profilePictureField(context),
+          Gap(18.h),
+          studentLevelDropdown(),
+          Gap(18.h),
+          classSelectionWidget(),
           Gap(20.h),
           loginOrSignUpOrPasswordButton(context),
         ],

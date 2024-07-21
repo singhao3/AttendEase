@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
-import 'dart:ui';
+import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as imglib;
@@ -18,7 +18,7 @@ class MLService {
   }
 
   Future<List> validateAndExtractFaceData(Uint8List imageBytes) async {
-    print("Validating and extracting face data");
+    debugPrint("Validating and extracting face data");
     final face = await detectFaceFromBytes(imageBytes);
     if (face == null) {
       throw Exception("No face detected in the uploaded profile picture.");
@@ -28,13 +28,13 @@ class MLService {
   }
 
   Future<Face?> detectFaceFromBytes(Uint8List bytes) async {
-    print("Starting face detection from bytes");
+    debugPrint("Starting face detection from bytes");
     imglib.Image? img = imglib.decodeImage(Uint8List.fromList(bytes));
     if (img == null) {
-      print("Failed to decode image");
+      debugPrint("Failed to decode image");
       return null;
     }
-    print("Image decoded successfully");
+    debugPrint("Image decoded successfully");
 
     // Convert image to NV21 format
     final nv21Bytes = _convertImageToNv21(img);
@@ -46,7 +46,7 @@ class MLService {
       bytesPerRow: img.width, // Bytes per row for NV21
     );
 
-    print("Image metadata created: $metadata");
+    debugPrint("Image metadata created: $metadata");
 
     final inputImage = InputImage.fromBytes(
       bytes: nv21Bytes, // Convert image to NV21 format
@@ -63,10 +63,10 @@ class MLService {
     );
     try {
       final List<Face> faces = await faceDetector.processImage(inputImage);
-      print("Faces detected: ${faces.length}");
+      debugPrint("Faces detected: ${faces.length}");
       return faces.isNotEmpty ? faces.first : null;
     } catch (e) {
-      print("Error during face detection: $e");
+      debugPrint("Error during face detection: $e");
       return null;
     } finally {
       faceDetector.close();
@@ -87,7 +87,7 @@ class MLService {
   Future<bool> matchFace(List referenceData) async {
     const double threshold = 1.0; // Adjust based on your accuracy needs
     double distance = _euclideanDistance(_predictedData, referenceData);
-    print("Euclidean distance: $distance");
+    debugPrint("Euclidean distance: $distance");
     return distance < threshold;
   }
 

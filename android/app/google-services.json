@@ -7,48 +7,20 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:271429526010:android:15d328f318b72010544443",
-        "android_client_info": {
-          "package_name": "com.example.attendease"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "271429526010-8vhfsv7o3fe4j6ufl0799942n34974pb.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCbfR1TbEcl4WnQGr1RrLL3WEcDqE3GqZw"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "271429526010-8vhfsv7o3fe4j6ufl0799942n34974pb.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "271429526010-delv1ni9cpotdlc3rf7mto1b0i46lpat.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.attendease"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:271429526010:android:2f512e7c76fc10ee544443",
         "android_client_info": {
           "package_name": "com.example.psm2_attendease"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "271429526010-1ulelkri7hdb9j1jjvqcnrdmjb8874it.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.psm2_attendease",
+            "certificate_hash": "75256bf039c5b7d6ca80ed320f90e3fb1e1ada5c"
+          }
+        },
         {
           "client_id": "271429526010-8vhfsv7o3fe4j6ufl0799942n34974pb.apps.googleusercontent.com",
           "client_type": 3

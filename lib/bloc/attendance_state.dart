@@ -6,10 +6,10 @@ abstract class AttendanceState {}
 class AttendanceInitial extends AttendanceState {}
 
 class AttendanceLoaded extends AttendanceState {
-  final Map<String, dynamic> weeklySchedule;
+  final List<dynamic> registeredClasses;
   final Map<String, dynamic> weeklyAttendance;
 
-  AttendanceLoaded(this.weeklySchedule, this.weeklyAttendance);
+  AttendanceLoaded(this.registeredClasses, this.weeklyAttendance);
 }
 
 class AttendanceError extends AttendanceState {

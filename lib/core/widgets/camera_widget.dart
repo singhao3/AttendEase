@@ -34,11 +34,11 @@ class _CameraWidgetState extends State<CameraWidget> {
           _isCameraInitialized = true;
         });
       }).catchError((e) {
-        print('Error initializing camera: $e');
+        debugPrint('Error initializing camera: $e');
       });
       _controller!.addListener(() {
         if (_controller!.value.hasError) {
-          print('Camera error: ${_controller!.value.errorDescription}');
+          debugPrint('Camera error: ${_controller!.value.errorDescription}');
         }
       });
     }
@@ -46,28 +46,28 @@ class _CameraWidgetState extends State<CameraWidget> {
 
   Future<void> _takePicture() async {
     if (!_controller!.value.isInitialized) {
-      print("Camera not initialized");
+      debugPrint("Camera not initialized");
       return;
     }
 
     if (_controller!.value.isTakingPicture) {
       // A capture is already pending, do nothing.
-      print("Capture already pending");
+      debugPrint("Capture already pending");
       return;
     }
 
     try {
-      print("Attempting to take picture");
+      debugPrint("Attempting to take picture");
       final XFile image = await _controller!.takePicture();
-      print("Picture taken: ${image.path}");
+      debugPrint("Picture taken: ${image.path}");
       if (!mounted) {
-        print("Widget not mounted after picture taken");
+        debugPrint("Widget not mounted after picture taken");
         return;
       }
       Navigator.pop(context, image);
-      print("Navigator pop called");
+      debugPrint("Navigator pop called");
     } catch (e) {
-      print("Failed to take picture: $e");
+      debugPrint("Failed to take picture: $e");
     }
   }
 

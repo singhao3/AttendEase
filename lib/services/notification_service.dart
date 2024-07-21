@@ -37,14 +37,23 @@ class NotificationService {
       String subject, String classTime, DateTime scheduledTime) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     int reminderTimeInMinutes = prefs.getInt('reminder_time') ?? 60;
+    String notificationTitle =
+        prefs.getString('notification_title') ?? 'Class Reminder';
+    String notificationBodyTemplate = prefs.getString('notification_body') ??
+        'Your class "{subject}" is scheduled soon.';
 
-    final reminderTime = scheduledTime.subtract(Duration(minutes: reminderTimeInMinutes));
+    final reminderTime =
+        scheduledTime.subtract(Duration(minutes: reminderTimeInMinutes));
+    String notificationBody =
+        notificationBodyTemplate.replaceAll('{subject}', subject);
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: reminderTime.hashCode,
         channelKey: 'class_reminders',
-        title: 'Class Reminder: $subject',
-        body: 'Your class "$subject" is scheduled at $classTime on ${DateFormat('EEEE').format(scheduledTime)}',
+        title: '$notificationTitle: $subject',
+        body:
+            '$notificationBody at $classTime on ${DateFormat('EEEE').format(scheduledTime)}',
         notificationLayout: NotificationLayout.Default,
       ),
       schedule: NotificationCalendar.fromDate(date: reminderTime),
@@ -52,19 +61,27 @@ class NotificationService {
   }
 
   static Future<void> triggerTestNotification() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String notificationTitle =
+        prefs.getString('notification_title') ?? 'Test Notification';
+    String notificationBodyTemplate =
+        prefs.getString('notification_body') ?? 'This is a test notification.';
+    String notificationBody =
+        notificationBodyTemplate.replaceAll('{subject}', 'Test Subject');
+
     try {
       await AwesomeNotifications().createNotification(
         content: NotificationContent(
           id: DateTime.now().hashCode,
           channelKey: 'class_reminders',
-          title: 'Test Notification',
-          body: 'This is a test notification.',
+          title: notificationTitle,
+          body: notificationBody,
           notificationLayout: NotificationLayout.Default,
         ),
       );
-      print("Test notification triggered successfully.");
+      debugPrint("Test notification triggered successfully.");
     } catch (e) {
-      print("Error triggering test notification: $e");
+      debugPrint("Error triggering test notification: $e");
     }
   }
 
@@ -74,7 +91,8 @@ class NotificationService {
 
     // Fetch the user's weekly schedule
     final userId = FirebaseAuth.instance.currentUser!.uid;
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    DocumentSnapshot userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
     if (userDoc.exists && userDoc.data() != null) {
       Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
       Map<String, dynamic> weeklySchedule = data['weeklySchedule'];
@@ -87,7 +105,8 @@ class NotificationService {
         for (var classInfo in classes) {
           final className = classInfo['subject'];
           final time = classInfo['time'];
-          final scheduleDate = custom_date_utils.DateUtils.getNextClassDate(day, time);
+          final scheduleDate =
+              custom_date_utils.DateUtils.getNextClassDate(day, time);
           await scheduleClassReminder(className, time, scheduleDate);
         }
       }

@@ -1,65 +1,177 @@
-import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class PdfGenerator {
-  static Future<void> generatePdf(Map<String, dynamic> reportData, {required Uint8List chartImage}) async {
-    final pdf = pw.Document();
+  static Future<void> generatePdf(
+      Map<String, dynamic> reportData, Map<String, dynamic> studentInfo) async {
+    try {
+      final pdf = pw.Document();
+      final sortedData = _sortDataBySubject(reportData);
+      final overallAttendance = _calculateOverallAttendance(sortedData);
 
-    final sortedData = _sortDataBySubject(reportData);
+      final font = await rootBundle.load("assets/fonts/OpenSans-Regular.ttf");
+      final ttf = pw.Font.ttf(font);
 
-    pdf.addPage(
-      pw.Page(
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Attendance Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-              pw.Center(
-                child: pw.Image(pw.MemoryImage(chartImage), height: 200, width: double.infinity, fit: pw.BoxFit.contain),
-              ),
-              pw.SizedBox(height: 20),
-              _buildLegend(),
-              pw.SizedBox(height: 20),
-              ...sortedData.entries.map((entry) {
-                return pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('Subject: ${entry.key}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 10),
-                    pw.TableHelper.fromTextArray(
-                      context: context,
-                      data: <List<String>>[
-                        <String>['Date', 'Status', 'Timestamp'],
-                        ...entry.value.map<List<String>>((attendance) {
-                          final formattedTimestamp = DateFormat('EEE, MMM d, yyyy - hh:mm a').format(DateTime.parse(attendance['timestamp']));
-                          return [
-                            attendance['date'].toString(),
-                            attendance['status'].toString(),
-                            formattedTimestamp,
-                          ];
-                        }),
-                      ],
-                    ),
-                    pw.SizedBox(height: 20),
-                  ],
-                );
-              }),
-            ],
-          );
-        },
-      ),
-    );
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return [
+              _buildHeader(studentInfo, ttf),
+              _buildOverallSummary(overallAttendance, ttf),
+              _buildAttendanceDetails(sortedData, ttf),
+            ];
+          },
+        ),
+      );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
+      debugPrint("Displaying PDF preview...");
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+      debugPrint("PDF preview displayed successfully.");
+    } catch (e) {
+      debugPrint("Error generating PDF: $e");
+    }
+  }
+
+  static pw.Widget _buildHeader(Map<String, dynamic> studentInfo, pw.Font ttf) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Attendance Report',
+            style: pw.TextStyle(
+                font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 10),
+        pw.Text('Student Information:',
+            style: pw.TextStyle(
+                font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Name: ${studentInfo['name']}', style: pw.TextStyle(font: ttf)),
+        pw.Text('Email: ${studentInfo['email']}',
+            style: pw.TextStyle(font: ttf)),
+        pw.Text('Contact: ${studentInfo['contactNumber']}',
+            style: pw.TextStyle(font: ttf)),
+        pw.Text('Level: ${studentInfo['level']}',
+            style: pw.TextStyle(font: ttf)),
+        pw.SizedBox(height: 20),
+      ],
     );
   }
 
-  static Map<String, List<Map<String, dynamic>>> _sortDataBySubject(Map<String, dynamic> reportData) {
+  static pw.Widget _buildOverallSummary(
+      Map<String, int> overallAttendance, pw.Font ttf) {
+    final total = overallAttendance['total']!;
+    final present = overallAttendance['present']!;
+    final late = overallAttendance['late']!;
+    final absent = overallAttendance['absent']!;
+    final attendanceRate = (present + late) / total * 100;
+    final onTimeRate = present / total * 100;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Overall Attendance Summary',
+            style: pw.TextStyle(
+                font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 10),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSummaryItem('Present', present, PdfColors.green, ttf),
+            _buildSummaryItem('Late', late, PdfColors.orange, ttf),
+            _buildSummaryItem('Absent', absent, PdfColors.red, ttf),
+          ],
+        ),
+        pw.SizedBox(height: 10),
+        pw.Text('Total Classes: $total', style: pw.TextStyle(font: ttf)),
+        pw.Text('Attendance Rate: ${attendanceRate.toStringAsFixed(1)}%',
+            style: pw.TextStyle(font: ttf)),
+        pw.Text('On-time Rate: ${onTimeRate.toStringAsFixed(1)}%',
+            style: pw.TextStyle(font: ttf)),
+        pw.SizedBox(height: 20),
+      ],
+    );
+  }
+
+  static pw.Widget _buildSummaryItem(
+      String label, int count, PdfColor color, pw.Font ttf) {
+    return pw.Column(
+      children: [
+        pw.Container(
+          width: 60,
+          height: 60,
+          decoration: pw.BoxDecoration(
+            color: color,
+            shape: pw.BoxShape.circle,
+          ),
+          child: pw.Center(
+            child: pw.Text(
+              count.toString(),
+              style: pw.TextStyle(
+                  font: ttf,
+                  color: PdfColors.white,
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        ),
+        pw.SizedBox(height: 5),
+        pw.Text(label, style: pw.TextStyle(font: ttf)),
+      ],
+    );
+  }
+
+  static pw.Widget _buildAttendanceDetails(
+      Map<String, List<Map<String, dynamic>>> sortedData, pw.Font ttf) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Detailed Attendance',
+            style: pw.TextStyle(
+                font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 10),
+        ...sortedData.entries.map((entry) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Subject: ${entry.key}',
+                  style: pw.TextStyle(
+                      font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 5),
+              pw.TableHelper.fromTextArray(
+                context: null,
+                data: <List<String>>[
+                  <String>['Date', 'Status', 'Time'],
+                  ...entry.value.map<List<String>>((attendance) {
+                    final formattedTimestamp = DateFormat('hh:mm a')
+                        .format(DateTime.parse(attendance['timestamp']));
+                    return [
+                      attendance['date'].toString(),
+                      attendance['status'].toString(),
+                      formattedTimestamp,
+                    ];
+                  }),
+                ],
+                cellStyle: pw.TextStyle(font: ttf),
+                headerStyle:
+                    pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
+                cellAlignment: pw.Alignment.center,
+                headerAlignment: pw.Alignment.center,
+              ),
+              pw.SizedBox(height: 20),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  static Map<String, List<Map<String, dynamic>>> _sortDataBySubject(
+      Map<String, dynamic> reportData) {
     final sortedData = <String, List<Map<String, dynamic>>>{};
 
     reportData.forEach((day, attendanceList) {
@@ -72,7 +184,8 @@ class PdfGenerator {
             }
             sortedData[subject]!.add({
               'date': day,
-              ...attendance.map<String, dynamic>((key, value) => MapEntry(key.toString(), value))
+              ...attendance.map<String, dynamic>(
+                  (key, value) => MapEntry(key.toString(), value))
             });
           }
         }
@@ -82,28 +195,35 @@ class PdfGenerator {
     return sortedData;
   }
 
-  static pw.Widget _buildLegend() {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.center,
-      children: [
-        _buildLegendItem(PdfColors.green, 'Present'),
-        pw.SizedBox(width: 20),
-        _buildLegendItem(PdfColors.red, 'Absent'),
-      ],
-    );
-  }
+  static Map<String, int> _calculateOverallAttendance(
+      Map<String, List<Map<String, dynamic>>> sortedData) {
+    int totalPresent = 0;
+    int totalLate = 0;
+    int totalAbsent = 0;
+    int totalClasses = 0;
 
-  static pw.Widget _buildLegendItem(PdfColor color, String text) {
-    return pw.Row(
-      children: [
-        pw.Container(
-          width: 16,
-          height: 16,
-          color: color,
-        ),
-        pw.SizedBox(width: 8),
-        pw.Text(text),
-      ],
-    );
+    sortedData.forEach((subject, attendanceList) {
+      for (var attendance in attendanceList) {
+        switch (attendance['status'].toString().toLowerCase()) {
+          case 'present':
+            totalPresent++;
+            break;
+          case 'late':
+            totalLate++;
+            break;
+          case 'absent':
+            totalAbsent++;
+            break;
+        }
+        totalClasses++;
+      }
+    });
+
+    return {
+      'present': totalPresent,
+      'late': totalLate,
+      'absent': totalAbsent,
+      'total': totalClasses,
+    };
   }
 }

@@ -2,28 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:math';
 
 import '../../../bloc/attendance_bloc.dart';
 import '../../../theming/colors.dart';
+import '../../../core/widgets/reusable_widgets.dart';
 
 class WeeklyScheduleScreen extends StatelessWidget {
   final AttendanceBloc attendanceBloc;
 
   const WeeklyScheduleScreen({super.key, required this.attendanceBloc});
 
-  Color generateAvatarColor(String subject) {
-    final random = Random(subject.hashCode);
-    final hue = random.nextDouble() * 360;
-    return HSVColor.fromAHSV(1.0, hue, 0.8, 0.8).toColor();
-  }
-
   List<String> getSortedDays() {
     return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  }
-
-  void _launchLocation(String location) {
-    // Implement the method to launch location, e.g., open a map
   }
 
   @override
@@ -45,13 +35,19 @@ class WeeklyScheduleScreen extends StatelessWidget {
                   BlocBuilder<AttendanceBloc, AttendanceState>(
                     builder: (context, state) {
                       if (state is AttendanceLoaded) {
-                        final weeklySchedule = state.weeklySchedule;
+                        final registeredClasses = state.registeredClasses;
                         final sortedDays = getSortedDays();
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: sortedDays.map((day) {
-                            final classes = weeklySchedule[day] ?? [];
+                            final classes = registeredClasses
+                                .where((classInfo) => classInfo['day'] == day)
+                                .toList();
+
+                            if (classes.isEmpty) {
+                              return Container(); // Return an empty container if no classes for this day
+                            }
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,18 +69,25 @@ class WeeklyScheduleScreen extends StatelessWidget {
                                   itemCount: classes.length,
                                   itemBuilder: (context, index) {
                                     final classInfo = classes[index];
-                                    final avatarColor = generateAvatarColor(classInfo['subject']);
+                                    final avatarColor =
+                                        ReusableWidgets.generateAvatarColor(
+                                            classInfo['subject'],
+                                            classInfo['day'],
+                                            classInfo['startTime']);
 
                                     return Card(
-                                      margin: EdgeInsets.symmetric(vertical: 8.h),
+                                      margin:
+                                          EdgeInsets.symmetric(vertical: 8.h),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(15.r),
+                                        borderRadius:
+                                            BorderRadius.circular(15.r),
                                       ),
                                       elevation: 2,
                                       child: Padding(
                                         padding: EdgeInsets.all(15.w),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Row(
                                               children: [
@@ -94,7 +97,8 @@ class WeeklyScheduleScreen extends StatelessWidget {
                                                     classInfo['subject'][0],
                                                     style: const TextStyle(
                                                       color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ),
@@ -104,7 +108,8 @@ class WeeklyScheduleScreen extends StatelessWidget {
                                                     classInfo['subject'],
                                                     style: TextStyle(
                                                       fontSize: 18.sp,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ),
@@ -113,11 +118,13 @@ class WeeklyScheduleScreen extends StatelessWidget {
                                             SizedBox(height: 10.h),
                                             Row(
                                               children: [
-                                                Icon(Icons.access_time, size: 16.sp, color: Colors.grey),
+                                                Icon(Icons.access_time,
+                                                    size: 16.sp,
+                                                    color: Colors.grey),
                                                 SizedBox(width: 5.w),
                                                 Expanded(
                                                   child: Text(
-                                                    classInfo['time'],
+                                                    '${classInfo['startTime']} - ${classInfo['endTime']}',
                                                     style: TextStyle(
                                                       fontSize: 14.sp,
                                                       color: Colors.grey[700],
@@ -127,43 +134,11 @@ class WeeklyScheduleScreen extends StatelessWidget {
                                               ],
                                             ),
                                             SizedBox(height: 10.h),
-                                            GestureDetector(
-                                              onTap: () => _launchLocation(classInfo['location']),
-                                              child: Row(
-                                                children: [
-                                                  Icon(Icons.location_on, size: 16.sp, color: Colors.grey),
-                                                  SizedBox(width: 5.w),
-                                                  Expanded(
-                                                    child: Text(
-                                                      classInfo['location'],
-                                                      style: TextStyle(
-                                                        fontSize: 14.sp,
-                                                        color: Colors.grey[700],
-                                                        decoration: TextDecoration.underline,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (classInfo['place'] != null) ...[
-                                              SizedBox(height: 10.h),
-                                              Row(
-                                                children: [
-                                                  Icon(Icons.meeting_room, size: 16.sp, color: Colors.grey),
-                                                  SizedBox(width: 5.w),
-                                                  Expanded(
-                                                    child: Text(
-                                                      classInfo['place'],
-                                                      style: TextStyle(
-                                                        fontSize: 14.sp,
-                                                        color: Colors.grey[700],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
+                                            ReusableWidgets.buildLocationRow(
+                                                classInfo['location']),
+                                            SizedBox(height: 10.h),
+                                            ReusableWidgets.buildPlaceRow(
+                                                'Room ${classInfo['roomNumber']}'),
                                           ],
                                         ),
                                       ),
@@ -179,7 +154,8 @@ class WeeklyScheduleScreen extends StatelessWidget {
                         return Center(
                           child: Text(
                             state.message,
-                            style: TextStyle(color: Colors.red, fontSize: 18.sp),
+                            style:
+                                TextStyle(color: Colors.red, fontSize: 18.sp),
                           ),
                         );
                       } else {

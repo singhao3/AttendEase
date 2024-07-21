@@ -6,14 +6,16 @@ import 'package:meta/meta.dart';
 part 'authentication_event.dart';
 part 'authentication_state.dart';
 
-class AuthenticationBloc extends Bloc<AuthenticationEvent, AuthenticationState> {
+class AuthenticationBloc
+    extends Bloc<AuthenticationEvent, AuthenticationState> {
   AuthenticationBloc() : super(AuthenticationInitial()) {
     on<AppStarted>(_onAppStarted);
     on<UserLoggedIn>(_onUserLoggedIn);
     on<UserLoggedOut>(_onUserLoggedOut);
   }
 
-  Future<void> _onAppStarted(AppStarted event, Emitter<AuthenticationState> emit) async {
+  Future<void> _onAppStarted(
+      AppStarted event, Emitter<AuthenticationState> emit) async {
     emit(AuthenticationLoading());
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -28,7 +30,8 @@ class AuthenticationBloc extends Bloc<AuthenticationEvent, AuthenticationState> 
     }
   }
 
-  Future<void> _onUserLoggedIn(UserLoggedIn event, Emitter<AuthenticationState> emit) async {
+  Future<void> _onUserLoggedIn(
+      UserLoggedIn event, Emitter<AuthenticationState> emit) async {
     final role = await _fetchUserRole(FirebaseAuth.instance.currentUser!.uid);
     if (role == 'admin') {
       emit(AdminAuthenticated());
@@ -37,13 +40,15 @@ class AuthenticationBloc extends Bloc<AuthenticationEvent, AuthenticationState> 
     }
   }
 
-  Future<void> _onUserLoggedOut(UserLoggedOut event, Emitter<AuthenticationState> emit) async {
+  Future<void> _onUserLoggedOut(
+      UserLoggedOut event, Emitter<AuthenticationState> emit) async {
     await FirebaseAuth.instance.signOut();
     emit(AuthenticationUnauthenticated());
   }
 
   Future<String> _fetchUserRole(String uid) async {
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
     return userDoc.data()?['role'] ?? 'user';
   }
 }

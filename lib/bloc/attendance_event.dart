@@ -3,7 +3,16 @@ part of 'attendance_bloc.dart';
 @immutable
 abstract class AttendanceEvent {}
 
-class LoadAttendance extends AttendanceEvent {}
+class LoadAttendance extends AttendanceEvent {
+  final String? studentId;
+
+  LoadAttendance({this.studentId});
+}
+
+class LoadAllAttendance extends AttendanceEvent {
+  final String studentId;
+  LoadAllAttendance({required this.studentId});
+}
 
 class UpdateAttendanceStatus extends AttendanceEvent {
   final String subject;

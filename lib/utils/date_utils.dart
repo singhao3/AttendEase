@@ -32,4 +32,12 @@ class DateUtils {
   static String cleanTimeString(String time) {
     return time.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
   }
+
+  static DateTime parseClassTime(String timeString) {
+    final now = DateTime.now();
+    final timeFormat = DateFormat('hh:mm a');
+    final parsedTime = timeFormat.parse(timeString);
+    return DateTime(
+        now.year, now.month, now.day, parsedTime.hour, parsedTime.minute);
+  }
 }

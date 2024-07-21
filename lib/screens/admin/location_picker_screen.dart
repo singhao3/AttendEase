@@ -1,4 +1,3 @@
-// lib/screens/admin/location_picker_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
@@ -8,14 +7,14 @@ class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key});
 
   @override
-  _LocationPickerScreenState createState() => _LocationPickerScreenState();
+  State<LocationPickerScreen> createState() => _LocationPickerScreenState();
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   LatLng? _pickedLocation;
   String? _pickedAddress;
   bool _isLoading = true;
-  LatLng _initialLocation = const LatLng(37.7749, -122.4194); 
+  LatLng _initialLocation = const LatLng(37.7749, -122.4194);
 
   @override
   void initState() {
@@ -58,11 +57,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     });
 
     // Get the address of the selected location
-    List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(position.latitude, position.longitude);
     if (placemarks.isNotEmpty) {
       Placemark place = placemarks[0];
       setState(() {
-        _pickedAddress = '${place.name}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
+        _pickedAddress =
+            '${place.name}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
       });
     }
   }
@@ -77,7 +78,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             IconButton(
               icon: const Icon(Icons.check),
               onPressed: () {
-                Navigator.of(context).pop('$_pickedAddress');
+                final String result =
+                    '$_pickedAddress|${_pickedLocation!.latitude},${_pickedLocation!.longitude}';
+                Navigator.of(context).pop(result);
               },
             ),
         ],
@@ -89,8 +92,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 target: _initialLocation,
                 zoom: 16,
               ),
-              onMapCreated: (controller) {
-              },
+              onMapCreated: (controller) {},
               onTap: _selectLocation,
               markers: _pickedLocation == null
                   ? {}
@@ -107,7 +109,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: Text(
                 _pickedAddress!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             )
           : null,

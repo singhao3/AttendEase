@@ -1,5 +1,5 @@
-import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:psm2_attendease/utils/pdf_generator.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/rendering.dart';
 
 class GenerateReportScreen extends StatefulWidget {
   const GenerateReportScreen({super.key});
@@ -23,6 +22,9 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
   final TextEditingController _startController = TextEditingController();
   final TextEditingController _endController = TextEditingController();
   final GlobalKey _chartKey = GlobalKey();
+  String? _selectedSubject;
+  String _viewType = 'Summary View';
+  final userId = FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void dispose() {
@@ -63,24 +65,6 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
     context.read<AttendanceBloc>().add(GenerateReport(_startDate!, _endDate!));
   }
 
-  Future<void> _downloadPdf(Map<String, dynamic> reportData) async {
-    final chartImage = await _capturePng();
-    PdfGenerator.generatePdf(reportData, chartImage: chartImage);
-  }
-
-  Future<Uint8List> _capturePng() async {
-    try {
-      RenderRepaintBoundary boundary =
-          _chartKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData!.buffer.asUint8List();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
   String _formatTimestamp(String timestamp) {
     try {
       final dateTime = DateTime.parse(timestamp);
@@ -94,11 +78,8 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       onPopInvoked: (isBackButton) {
-        // Clear the attendance state to avoid reloading issues
         context.read<AttendanceBloc>().add(ClearAttendance());
-        context
-            .read<AttendanceBloc>()
-            .add(LoadAttendance()); // Trigger reloading of attendance data
+        context.read<AttendanceBloc>().add(LoadAttendance());
       },
       child: Scaffold(
         appBar: AppBar(
@@ -129,27 +110,115 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
                     return const CircularProgressIndicator();
                   } else if (state is ReportLoaded) {
                     final sortedData = _sortDataBySubject(state.reportData);
+                    final subjects = sortedData.keys.toList();
+                    final summary = _calculateOverallAttendance(sortedData);
                     return Expanded(
                       child: Column(
                         children: [
-                          RepaintBoundary(
-                            key: _chartKey,
-                            child: _buildChart(sortedData),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              DropdownButton<String>(
+                                value: _viewType,
+                                onChanged: (String? newValue) {
+                                  setState(() {
+                                    _viewType = newValue!;
+                                    _selectedSubject = null;
+                                  });
+                                },
+                                items: <String>[
+                                  'Summary View',
+                                  'Report Cards',
+                                  'Pie Chart'
+                                ].map<DropdownMenuItem<String>>((String value) {
+                                  return DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(value),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(width: 20),
+                              if (_viewType == 'Pie Chart')
+                                DropdownButton<String>(
+                                  hint: const Text('Select Subject'),
+                                  value: _selectedSubject,
+                                  onChanged: (String? newValue) {
+                                    setState(() {
+                                      _selectedSubject = newValue;
+                                    });
+                                  },
+                                  items: subjects.map((String subject) {
+                                    return DropdownMenuItem<String>(
+                                      value: subject,
+                                      child: Text(subject),
+                                    );
+                                  }).toList(),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 20),
-                          _buildLegend(),
                           Expanded(
-                            child: ListView.builder(
-                              itemCount: sortedData.length,
-                              itemBuilder: (context, index) {
-                                final entry =
-                                    sortedData.entries.elementAt(index);
-                                return _buildReportCard(entry.key, entry.value);
-                              },
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  if (_viewType == 'Summary View')
+                                    _buildAttendanceSummary(summary)
+                                  else if (_viewType == 'Pie Chart' &&
+                                      _selectedSubject != null)
+                                    Column(
+                                      children: [
+                                        RepaintBoundary(
+                                          key: _chartKey,
+                                          child: _buildPieChart(
+                                              sortedData[_selectedSubject]!),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        _buildLegend(
+                                            sortedData[_selectedSubject]),
+                                      ],
+                                    )
+                                  else if (_viewType == 'Report Cards')
+                                    Column(
+                                      children: sortedData.entries.map((entry) {
+                                        return _buildReportCard(
+                                            entry.key, entry.value);
+                                      }).toList(),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
+                          const SizedBox(height: 20),
                           ElevatedButton.icon(
-                            onPressed: () => _downloadPdf(state.reportData),
+                            onPressed: () async {
+                              try {
+                                debugPrint("Download button pressed");
+                                DocumentSnapshot userDoc =
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(userId)
+                                        .get();
+
+                                Map<String, dynamic> studentInfo = {
+                                  'name': userDoc['name'],
+                                  'email': userDoc['email'],
+                                  'contactNumber': userDoc['contactNumber'],
+                                  'level': userDoc['level'],
+                                };
+
+                                debugPrint("Generating PDF...");
+                                await PdfGenerator.generatePdf(
+                                    state.reportData, studentInfo);
+                                debugPrint("PDF generation complete");
+                              } catch (e) {
+                                debugPrint("Error generating PDF: $e");
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text('Error generating PDF: $e')),
+                                );
+                              }
+                            },
                             icon: const Icon(FontAwesomeIcons.download),
                             label: const Text('Download PDF'),
                             style: ElevatedButton.styleFrom(
@@ -236,7 +305,7 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(attendance['status']),
+                    _buildStatusBadge(attendance['status']),
                     Text(_formatTimestamp(attendance['timestamp'])),
                   ],
                 ),
@@ -248,72 +317,137 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
     );
   }
 
-  Widget _buildChart(Map<String, List<Map<String, dynamic>>> sortedData) {
-    final List<BarChartGroupData> barGroups = [];
-    sortedData.forEach((subject, attendanceList) {
-      final int presentCount = attendanceList
-          .where((attendance) => attendance['status'] == 'present')
-          .length;
-      final int absentCount = attendanceList.length - presentCount;
+  Widget _buildStatusBadge(String status) {
+    Color badgeColor;
+    IconData icon;
 
-      barGroups.add(
-        BarChartGroupData(
-          x: sortedData.keys.toList().indexOf(subject),
-          barRods: [
-            BarChartRodData(
-              toY: presentCount.toDouble(),
-              color: Colors.green,
-              width: 15,
-            ),
-            BarChartRodData(
-              toY: absentCount.toDouble(),
-              color: Colors.red,
-              width: 15,
-            ),
-          ],
-        ),
-      );
-    });
+    switch (status.toLowerCase()) {
+      case 'present':
+        badgeColor = Colors.green;
+        icon = Icons.check_circle;
+        break;
+      case 'late':
+        badgeColor = Colors.orange;
+        icon = Icons.access_time;
+        break;
+      case 'absent':
+        badgeColor = Colors.red;
+        icon = Icons.cancel;
+        break;
+      default:
+        badgeColor = Colors.grey;
+        icon = Icons.help_outline;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: badgeColor),
+          const SizedBox(width: 4),
+          Text(
+            status.capitalize(),
+            style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPieChart(List<Map<String, dynamic>> attendanceList) {
+    final List<PieChartSectionData> sections = [];
+    int totalPresent = 0;
+    int totalLate = 0;
+    int totalAbsent = 0;
+
+    for (var attendance in attendanceList) {
+      if (attendance['status'] == 'present') {
+        totalPresent++;
+      } else if (attendance['status'] == 'late') {
+        totalLate++;
+      } else if (attendance['status'] == 'absent') {
+        totalAbsent++;
+      }
+    }
+
+    if (totalPresent > 0) {
+      sections.add(PieChartSectionData(
+        value: totalPresent.toDouble(),
+        title: 'Present',
+        color: Colors.green,
+        radius: 50,
+      ));
+    }
+    if (totalLate > 0) {
+      sections.add(PieChartSectionData(
+        value: totalLate.toDouble(),
+        title: 'Late',
+        color: Colors.orange,
+        radius: 50,
+      ));
+    }
+    if (totalAbsent > 0) {
+      sections.add(PieChartSectionData(
+        value: totalAbsent.toDouble(),
+        title: 'Absent',
+        color: Colors.red,
+        radius: 50,
+      ));
+    }
 
     return SizedBox(
       height: 200,
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          barGroups: barGroups,
-          titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (double value, TitleMeta meta) {
-                  final subject = sortedData.keys.toList()[value.toInt()];
-                  return SideTitleWidget(
-                    axisSide: meta.axisSide,
-                    space: 4.0,
-                    child: Text(
-                      subject,
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  );
-                },
-              ),
-            ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: true),
-            ),
+      child: PieChart(
+        PieChartData(
+          sections: sections,
+          centerSpaceRadius: 40,
+          sectionsSpace: 2,
+          borderData: FlBorderData(show: false),
+          pieTouchData: PieTouchData(
+            touchCallback: (FlTouchEvent event, pieTouchResponse) {},
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLegend() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildLegend(List<Map<String, dynamic>>? attendanceList) {
+    if (attendanceList == null) return const SizedBox.shrink();
+
+    int totalPresent = 0;
+    int totalLate = 0;
+    int totalAbsent = 0;
+
+    for (var attendance in attendanceList) {
+      if (attendance['status'] == 'present') {
+        totalPresent++;
+      } else if (attendance['status'] == 'late') {
+        totalLate++;
+      } else if (attendance['status'] == 'absent') {
+        totalAbsent++;
+      }
+    }
+
+    return Column(
       children: [
-        _buildLegendItem(Colors.green, 'Present'),
-        const SizedBox(width: 20),
-        _buildLegendItem(Colors.red, 'Absent'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildLegendItem(Colors.green, 'Present ($totalPresent)'),
+            const SizedBox(width: 20),
+            _buildLegendItem(Colors.orange, 'Late ($totalLate)'),
+            const SizedBox(width: 20),
+            _buildLegendItem(Colors.red, 'Absent ($totalAbsent)'),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text('Total Classes: ${totalPresent + totalLate + totalAbsent}'),
       ],
     );
   }
@@ -331,4 +465,106 @@ class _GenerateReportScreenState extends State<GenerateReportScreen> {
       ],
     );
   }
+
+  Widget _buildAttendanceSummary(Map<String, int> summary) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Overall Attendance Summary',
+              style: GoogleFonts.ropaSans(
+                  fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildSummaryItem('Present', summary['present']!, Colors.green),
+                _buildSummaryItem('Late', summary['late']!, Colors.orange),
+                _buildSummaryItem('Absent', summary['absent']!, Colors.red),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Total Classes: ${summary['total']}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: summary['attended']! / summary['total']!,
+              backgroundColor: Colors.grey[300],
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Attendance Rate: ${(summary['attended']! / summary['total']! * 100).toStringAsFixed(1)}%',
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'On-time Rate: ${(summary['present']! / summary['total']! * 100).toStringAsFixed(1)}%',
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(String label, int count, Color color) {
+    return Column(
+      children: [
+        Text(
+          count.toString(),
+          style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.bold, color: color),
+        ),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    return "${this[0].toUpperCase()}${substring(1).toLowerCase()}";
+  }
+}
+
+Map<String, int> _calculateOverallAttendance(
+    Map<String, List<Map<String, dynamic>>> sortedData) {
+  int totalPresent = 0;
+  int totalLate = 0;
+  int totalAbsent = 0;
+  int totalClasses = 0;
+
+  sortedData.forEach((subject, attendanceList) {
+    for (var attendance in attendanceList) {
+      switch (attendance['status'].toString().toLowerCase()) {
+        case 'present':
+          totalPresent++;
+          break;
+        case 'late':
+          totalLate++;
+          break;
+        case 'absent':
+          totalAbsent++;
+          break;
+      }
+      totalClasses++;
+    }
+  });
+
+  return {
+    'present': totalPresent,
+    'late': totalLate,
+    'absent': totalAbsent,
+    'total': totalClasses,
+    'attended': totalPresent + totalLate,
+  };
 }
