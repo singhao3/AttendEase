@@ -20,13 +20,25 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> registeredClasses = [];
   List<Map<String, dynamic>> predefinedClasses = [];
-  Map<String, dynamic>? selectedClass;
+  String? selectedClassIdentifier;
+  Key dropdownKey = UniqueKey();
 
   @override
   void initState() {
     super.initState();
     fetchPredefinedClasses();
     fetchStudentSchedule();
+  }
+
+  void _resetDropdown() {
+    setState(() {
+      dropdownKey = UniqueKey();
+      selectedClassIdentifier = null;
+    });
+  }
+
+  String _getClassIdentifier(Map<String, dynamic> classInfo) {
+    return '${classInfo['day']}-${classInfo['subject']}-${classInfo['startTime']}-${classInfo['endTime']}-${classInfo['roomNumber']}';
   }
 
   Future<void> fetchPredefinedClasses() async {
@@ -37,6 +49,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       if (adminDoc.exists && adminDoc.data() != null) {
         Map<String, dynamic>? classesMap = adminDoc.get('classes');
         if (classesMap != null) {
+          Set<String> uniqueIdentifiers = {};
           List<Map<String, dynamic>> allClasses = [];
 
           classesMap.forEach((level, levelData) {
@@ -45,15 +58,22 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   List<Map<String, dynamic>>.from(dayData);
               for (var classInfo in dayClasses) {
                 classInfo['day'] = day;
-                allClasses.add(classInfo);
+                String identifier = _getClassIdentifier(classInfo);
+                if (!uniqueIdentifiers.contains(identifier)) {
+                  uniqueIdentifiers.add(identifier);
+                  allClasses.add(classInfo);
+                }
               }
             });
           });
 
-          allClasses.sort((a, b) => _dayToInt(a['day']).compareTo(_dayToInt(b['day'])));
+          allClasses.sort(
+              (a, b) => _dayToInt(a['day']).compareTo(_dayToInt(b['day'])));
 
           setState(() {
             predefinedClasses = allClasses;
+            print(
+                'Fetched Predefined Classes: ${predefinedClasses.map(_getClassIdentifier).toList()}');
           });
         }
       }
@@ -87,13 +107,12 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
         setState(() {
           registeredClasses = classes;
+          registeredClasses.sort(
+              (a, b) => _dayToInt(a['day']).compareTo(_dayToInt(b['day'])));
           predefinedClasses.removeWhere((predefinedClass) =>
               registeredClasses.any((registeredClass) =>
-                  registeredClass['subject'] == predefinedClass['subject'] &&
-                  registeredClass['startTime'] == predefinedClass['startTime'] &&
-                  registeredClass['endTime'] == predefinedClass['endTime'] &&
-                  registeredClass['location'] == predefinedClass['location'] &&
-                  registeredClass['roomNumber'] == predefinedClass['roomNumber']));
+                  _getClassIdentifier(registeredClass) ==
+                  _getClassIdentifier(predefinedClass)));
         });
       }
     } catch (e) {
@@ -123,21 +142,23 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   void _addClass(Map<String, dynamic> classInfo) {
     setState(() {
-      registeredClasses.add(classInfo);
-      // Remove added class from predefined classes
+      if (!registeredClasses.any(
+          (c) => _getClassIdentifier(c) == _getClassIdentifier(classInfo))) {
+        registeredClasses.add(classInfo);
+      }
       predefinedClasses.removeWhere((predefinedClass) =>
-          predefinedClass['subject'] == classInfo['subject'] &&
-          predefinedClass['startTime'] == classInfo['startTime'] &&
-          predefinedClass['endTime'] == classInfo['endTime'] &&
-          predefinedClass['location'] == classInfo['location'] &&
-          predefinedClass['roomNumber'] == classInfo['roomNumber']);
-      selectedClass = null;
+          _getClassIdentifier(predefinedClass) ==
+          _getClassIdentifier(classInfo));
+      selectedClassIdentifier = null;
     });
   }
 
   void _removeClass(int index) {
     setState(() {
-      registeredClasses.removeAt(index);
+      Map<String, dynamic> removedClass = registeredClasses.removeAt(index);
+      predefinedClasses.add(removedClass);
+      predefinedClasses
+          .sort((a, b) => _dayToInt(a['day']).compareTo(_dayToInt(b['day'])));
     });
   }
 
@@ -149,6 +170,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('Selected Class Identifier: $selectedClassIdentifier');
+    print(
+        'Predefined Classes: ${predefinedClasses.map(_getClassIdentifier).toList()}');
+    print(
+        'Registered Classes: ${registeredClasses.map(_getClassIdentifier).toList()}');
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.studentName}\'s Schedule',
@@ -164,25 +190,32 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: DropdownButtonFormField<Map<String, dynamic>>(
+            child: DropdownButtonFormField<String>(
+              key: dropdownKey, // Add this line
               isExpanded: true,
               hint: const Text('Please select to add class'),
-              value: selectedClass,
+              value: null,
               items: predefinedClasses.map((classInfo) {
-                return DropdownMenuItem<Map<String, dynamic>>(
-                  value: classInfo,
+                String identifier = _getClassIdentifier(classInfo);
+                return DropdownMenuItem<String>(
+                  value: identifier,
                   child: Text(
-                    '${classInfo['day']} - ${classInfo['subject']} - ${classInfo['startTime']} to ${classInfo['endTime']}',
+                    '${classInfo['day']} - ${classInfo['subject']} - ${classInfo['startTime']} to ${classInfo['endTime']} - Room ${classInfo['roomNumber']}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 );
               }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedClass = value;
-                });
+              onChanged: (String? value) {
                 if (value != null) {
-                  _addClass(value);
+                  Map<String, dynamic>? selectedClass =
+                      predefinedClasses.firstWhere(
+                    (classInfo) => _getClassIdentifier(classInfo) == value,
+                    orElse: () => <String, dynamic>{},
+                  );
+                  if (selectedClass.isNotEmpty) {
+                    _addClass(selectedClass);
+                    _resetDropdown();
+                  }
                 }
               },
               decoration: const InputDecoration(labelText: 'Add Class'),
@@ -201,7 +234,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   ),
                   child: ListTile(
                     title: Text(classInfo['subject'],
-                        style: GoogleFonts.ropaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: GoogleFonts.ropaSans(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

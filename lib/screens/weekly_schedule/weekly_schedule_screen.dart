@@ -13,7 +13,7 @@ class WeeklyScheduleScreen extends StatelessWidget {
   const WeeklyScheduleScreen({super.key, required this.attendanceBloc});
 
   List<String> getSortedDays() {
-    return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   }
 
   @override

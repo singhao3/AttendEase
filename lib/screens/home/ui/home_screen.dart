@@ -13,7 +13,6 @@ import '../../../core/widgets/no_internet.dart';
 import '../../../core/widgets/user_profile_section.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/widgets/error_state.dart';
-import '../../../core/widgets/weekend_message.dart';
 import '../../../theming/colors.dart';
 import '/theming/styles.dart';
 import '/helpers/firebase_helpers.dart';
@@ -76,11 +75,6 @@ class _HomeScreenState extends State<HomeScreen> {
       'Sunday'
     ];
     return days[now.weekday - 1];
-  }
-
-  bool isWeekend() {
-    final today = getToday();
-    return today == 'Saturday' || today == 'Sunday';
   }
 
   Future<void> _scanFace(String subject, String day) async {
@@ -192,10 +186,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _welcomeText(userName),
             SizedBox(height: 20.h),
             Expanded(
-              child: isWeekend()
-                  ? const WeekendMessage()
-                  : _todayClassList(
-                      context, today, registeredClasses, weeklyAttendance),
+              child: _todayClassList(
+                context, today, registeredClasses, weeklyAttendance),
             ),
           ],
         ),
