@@ -38,7 +38,7 @@ flutter pub get
 flutter run
 ```
 ### Option 2:
-1. Download the APK file from the repository.
+1. Download the APK file from the [release](https://github.com/singhao3/AttendEase/releases/tag/v0.0.1).
 2. Install the APK on your Android device.
 3. Open the app and use the following admin credentials to log in
 > Email: tiesinghao3300@gmail.com
