@@ -29,7 +29,7 @@ flutter pub get
 1. Go to the Firebase Console.
 2. Create a new project.
 3. Add an Android app to your project and follow the instructions to download the google-services.json file.
-4. Replace the existing android/app/google-services.json file with your downloaded file.
+4. Place the google-services.json into android/app/.
 5. Update the Firebase configuration in your Flutter project as needed.
 
 ## Run the app 
