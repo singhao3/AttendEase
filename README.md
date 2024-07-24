@@ -25,14 +25,7 @@ flutter pub get
 ```
 
 ## Set up Firebase:
-
-### Option 1: Use Existing Firebase Configuration: 
-The repository already contains the Firebase configuration files (google-services.json and GoogleService-Info.plist), so you can directly access the Firebase project. Use the following admin credentials to log in:
-> Email: tiesinghao3300@gmail.com
-
-> Password: Password123!
-
-### Option 2: Create Your Own Firebase Configuration:
+### Option 1: Create Your Own Firebase Configuration:
 1. Go to the Firebase Console.
 2. Create a new project.
 3. Add an Android app to your project and follow the instructions to download the google-services.json file.
@@ -44,6 +37,13 @@ The repository already contains the Firebase configuration files (google-service
 ```
 flutter run
 ```
+### Option 2:
+1. Download the APK file from the repository.
+2. Install the APK on your Android device.
+3. Open the app and use the following admin credentials to log in
+> Email: tiesinghao3300@gmail.com
+
+> Password: Password123!
 
 ## Screenshots
 ### Admin Side
